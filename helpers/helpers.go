@@ -50,7 +50,14 @@ func ScrapArticle(url string) Article {
 	})
 	doc.Find("section.body").Children().Each(func(_ int, s *goquery.Selection) {
 		storyImage, existImage := s.Find("img").Attr("src")
-		if existImage {
+		if s.HasClass("gallery") {
+			images := s.Find(".galleryItems > li > a").Map(func(_ int, s *goquery.Selection) string {
+				mediaImage, _ := s.Attr("href")
+				return fmt.Sprintf("<figure><img src='%s'></figure>", mediaImage)
+			})
+
+			text += strings.Join(images, "")
+		} else if existImage {
 			text += fmt.Sprintf("<figure><img src='%s'></figure>", storyImage)
 		} else if s.HasClass("twitter-tweet") {
 			twitter, _ := s.Find("a").Last().Attr("href")
