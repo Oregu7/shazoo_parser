@@ -44,8 +44,9 @@ func ScrapArticle(url string) Article {
 	text := ""
 	title := strings.TrimSpace(doc.Find("div.entryContextHeader > h1").Text())
 	image, _ := doc.Find("div.entryHeaderContainer.entryImageContainer > img").Attr("src")
+	regxTag := regexp.MustCompile(`[\s-:']+`)
 	tags := doc.Find("section.tags > ul.inline > li > a").Map(func(_ int, s *goquery.Selection) string {
-		return "#" + s.Text()
+		return "#" + regxTag.ReplaceAllString(strings.TrimSpace(s.Text()), "_")
 	})
 	doc.Find("section.body").Children().Each(func(_ int, s *goquery.Selection) {
 		storyImage, existImage := s.Find("img").Attr("src")
@@ -55,11 +56,8 @@ func ScrapArticle(url string) Article {
 			twitter, _ := s.Find("a").Last().Attr("href")
 			text += fmt.Sprintf("<figure><iframe src='/embed/twitter?url=%s'></iframe></figure>", twitter)
 		} else if s.HasClass("videoPlayer") {
-			regx := regexp.MustCompile(`https://www.youtube.com/embed/(\w+)\?.*`)
-			youtube, _ := s.Find("iframe").Attr("src")
-			match := regx.FindStringSubmatch(youtube)
-			shortURL := "https://www.youtube.com/watch?v=" + match[1]
-			text += fmt.Sprintf("<figure><iframe src='/embed/youtube?url=%s'></iframe></figure>", shortURL)
+			videoURL, _ := s.Find("iframe").Attr("src")
+			text += createVideoFrame(videoURL)
 		} else if goquery.NodeName(s) == "ul" {
 			list := s.Find("li").Map(func(_ int, s *goquery.Selection) string {
 				return "<li>" + strings.TrimSpace(s.Text()) + "</li>"
@@ -69,6 +67,20 @@ func ScrapArticle(url string) Article {
 			nodeName := goquery.NodeName(s)
 			ret, _ := s.Html()
 			text += fmt.Sprintf("<%s>%s</%s>", nodeName, strings.TrimSpace(ret), nodeName)
+		}
+	})
+
+	doc.Find("section.media").Children().Each(func(_ int, s *goquery.Selection) {
+		if s.HasClass("gallery") {
+			images := s.Find(".galleryItems > li > a").Map(func(_ int, s *goquery.Selection) string {
+				mediaImage, _ := s.Attr("href")
+				return fmt.Sprintf("<figure><img src='%s'></figure>", mediaImage)
+			})
+
+			text += strings.Join(images, "")
+		} else if s.HasClass("videoPlayer") {
+			videoURL, _ := s.Find("iframe").Attr("src")
+			text += createVideoFrame(videoURL)
 		}
 	})
 
@@ -119,8 +131,27 @@ func PostToChannel(bot *tgbotapi.BotAPI, url string) {
 	article := ScrapArticle(url)
 	telegraphURL := PostToTelegraph(article)
 	// post to channel
-	text := fmt.Sprintf("<a href='%s'>%s</a>", telegraphURL, article.title)
+	tags := strings.Join(article.tags, " ")
+	text := fmt.Sprintf("%s\n\n<a href='%s'>%s</a>", tags, telegraphURL, article.title)
 	msg := tgbotapi.NewMessageToChannel(os.Getenv("CHANNEL"), text)
 	msg.ParseMode = "HTML"
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{tgbotapi.NewInlineKeyboardButtonURL("Читать на сайте", url)})
 	bot.Send(msg)
+}
+
+func createVideoFrame(url string) string {
+	youtubeRegx := regexp.MustCompile(`https://www.youtube.com/embed/([-\w]+)\?.*`)
+	serviceName := "youtube"
+	shortURL := url
+
+	isTwich, _ := regexp.MatchString("twitch", url)
+	if isTwich {
+		serviceName = "twitch"
+		return fmt.Sprintf("<a href = '%s'>%s</a>", url, url)
+	}
+
+	match := youtubeRegx.FindStringSubmatch(url)
+	shortURL = "https://www.youtube.com/watch?v=" + match[1]
+
+	return fmt.Sprintf("<figure><iframe src='/embed/%s?url=%s'></iframe></figure>", serviceName, shortURL)
 }
