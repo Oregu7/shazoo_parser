@@ -44,13 +44,20 @@ func ScrapArticle(url string) Article {
 	text := ""
 	title := strings.TrimSpace(doc.Find("div.entryContextHeader > h1").Text())
 	image, _ := doc.Find("div.entryHeaderContainer.entryImageContainer > img").Attr("src")
-	regxTag := regexp.MustCompile(`[\s-:']+`)
+	// tags
+	regxTagReplace := regexp.MustCompile(`[\s-:']+`)
+	regxTag := regexp.MustCompile(`.+\/([\w-]+)`)
 	tags := doc.Find("section.tags > ul.inline > li > a").Map(func(_ int, s *goquery.Selection) string {
-		return "#" + regxTag.ReplaceAllString(strings.TrimSpace(s.Text()), "_")
+		text, _ := s.Attr("href")
+		match := regxTag.FindStringSubmatch(text)
+		return "#" + regxTagReplace.ReplaceAllString(match[1], "_")
 	})
+	// body
 	doc.Find("section.body").Children().Each(func(_ int, s *goquery.Selection) {
 		storyImage, existImage := s.Find("img").Attr("src")
-		if s.HasClass("gallery") {
+		if s.HasClass("reference") {
+			text += ""
+		} else if s.HasClass("gallery") {
 			images := s.Find(".galleryItems > li > a").Map(func(_ int, s *goquery.Selection) string {
 				mediaImage, _ := s.Attr("href")
 				return fmt.Sprintf("<figure><img src='%s'></figure>", mediaImage)
@@ -96,6 +103,7 @@ func ScrapArticle(url string) Article {
 
 // PostToTelegraph постит статью в telegra.ph
 func PostToTelegraph(articel Article) string {
+	fmt.Println(articel.tags)
 	client, _ := tgcl.Load(os.Getenv("TELEGRAPH_TOKEN"))
 	html := fmt.Sprintf("<figure><img src='%s'></figure><div>%s</div>", articel.image, articel.text)
 	page, _ := client.CreatePageWithHtml(articel.title, "Shazoo", "https://t.me/shazoo_news", html, true)
