@@ -96,17 +96,14 @@ func ScrapArticle(url string) Article {
 
 func createVideoFrame(url string) string {
 	youtubeRegx := regexp.MustCompile(`https://www.youtube.com/embed/([-\w]+)\?.*`)
-	serviceName := "youtube"
-	shortURL := url
 
-	isTwich, _ := regexp.MatchString("twitch", url)
-	if isTwich {
-		serviceName = "twitch"
-		return fmt.Sprintf("<a href = '%s'>%s</a>", url, url)
+	isYoutube, _ := regexp.MatchString("youtube", url)
+	if isYoutube {
+		match := youtubeRegx.FindStringSubmatch(url)
+		shortURL := "https://www.youtube.com/watch?v=" + match[1]
+
+		return fmt.Sprintf("<figure><iframe src='/embed/youtube?url=%s'></iframe></figure>", shortURL)
 	}
 
-	match := youtubeRegx.FindStringSubmatch(url)
-	shortURL = "https://www.youtube.com/watch?v=" + match[1]
-
-	return fmt.Sprintf("<figure><iframe src='/embed/%s?url=%s'></iframe></figure>", serviceName, shortURL)
+	return fmt.Sprintf("<a href = '%s'>%s</a>", url, url)
 }
