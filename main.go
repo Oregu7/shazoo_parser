@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"shazoo/helpers"
+	"parsers/shazoo/helpers"
 
 	"github.com/jasonlvhit/gocron"
 	"github.com/joho/godotenv"
